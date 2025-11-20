@@ -98,8 +98,6 @@ export function listCommand(program: Command) {
           console.log(
             chalk.cyan(`  • ${session.customTitle || "Untitled Chat"}`)
           );
-          console.log(chalk.dim(`    ID: ${session.sessionId}`));
-          console.log(chalk.dim(`    Path: ${session.filePath}`));
         });
 
         // Upload to private gists

@@ -88,13 +88,20 @@ export async function getGitHubRepoInfo(
   octokit: Octokit,
   owner: string,
   repo: string
-): Promise<GitHubRepoInfo> {
+): Promise<GitHubRepoInfo | null> {
   const cacheKey = `${owner}/${repo}`;
   if (cachedRepoInfos.has(cacheKey)) {
     return cachedRepoInfos.get(cacheKey)!;
   }
 
-  const response = await octokit.repos.get({ owner, repo });
+  const response = await octokit.repos.get({ owner, repo }).catch((error) => {
+    return null;
+  });
+
+  if (!response) {
+    return null;
+  }
+
   const repoInfo: GitHubRepoInfo = {
     repoId: response.data.id,
     name: response.data.name,
