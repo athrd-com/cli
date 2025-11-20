@@ -1,21 +1,13 @@
 import { Octokit } from "@octokit/rest";
 import chalk from "chalk";
 import { Command } from "commander";
-import * as fs from "fs/promises";
-import * as fsSync from "fs";
 import inquirer from "inquirer";
 import { requireAuth } from "../utils/auth.js";
-import {
-  findAllChatSessions,
-  formatDate,
-  getIDEName,
-  mergeAgentFilesIntoSession,
-  parseJSONL,
-  parseClaudeCodeSession,
-  type ChatSession,
-} from "../utils/chatProviders.js";
-import { getGitHubUserInfo, getGitHubOrgInfo } from "../utils/github.js";
+import { formatDate } from "../utils/date.js";
 import { getGitHubRepo } from "../utils/git.js";
+import { getGitHubOrgInfo, getGitHubUserInfo } from "../utils/github.js";
+import { providers, getProvider } from "../providers/index.js";
+import { ChatSession } from "../types/index.js";
 
 export function listCommand(program: Command) {
   program
@@ -26,7 +18,11 @@ export function listCommand(program: Command) {
       try {
         console.log(chalk.blue("📋 Finding AI chat threads...\n"));
 
-        const sessions = await findAllChatSessions();
+        // Find sessions from all providers
+        const allSessions = await Promise.all(
+          providers.map((p) => p.findSessions())
+        );
+        const sessions = allSessions.flat();
 
         if (sessions.length === 0) {
           console.log(chalk.yellow("No chat sessions found."));
@@ -58,9 +54,9 @@ export function listCommand(program: Command) {
           const workspace = session.workspaceName
             ? chalk.dim(`[${session.workspaceName}]`)
             : "";
-          const sourceLabel = chalk.dim(
-            `(${getIDEName(session.source)})`
-          );
+
+          const provider = getProvider(session.source);
+          const sourceLabel = chalk.dim(`(${provider?.name || session.source})`);
 
           return {
             name: `${title} ${workspace} ${sourceLabel} ${dateStr} ${messages}`,
@@ -113,40 +109,27 @@ export function listCommand(program: Command) {
 
           // Extract organization name from repo (format: "org/repo")
           const orgName = githubRepo?.split("/")[0];
-          const orgInfo = orgName ? await getGitHubOrgInfo(octokit, orgName) : null;
+          const orgInfo = orgName
+            ? await getGitHubOrgInfo(octokit, orgName)
+            : null;
 
           const gistUrls: string[] = [];
 
           for (const session of answers.selectedSessions) {
-            let sessionData: any;
-
-            // Parse the session file based on format (JSONL for Claude Code, JSON for others)
-            if (session.source === "claude-code") {
-              // Claude Code sessions are in JSONL format
-              const fileContent = fsSync.readFileSync(session.filePath, "utf-8");
-              const jsonlEntries = parseJSONL(fileContent);
-              sessionData = parseClaudeCodeSession(jsonlEntries);
-
-              // Merge agent files into the session data
-              if (session.agentFiles) {
-                sessionData = await mergeAgentFilesIntoSession(
-                  sessionData,
-                  session.agentFiles
-                );
-              }
-            } else {
-              // VS Code and Cursor sessions are in regular JSON format
-              const fileContent = await fs.readFile(session.filePath, "utf-8");
-              sessionData = JSON.parse(fileContent);
+            const provider = getProvider(session.source);
+            if (!provider) {
+              console.warn(chalk.yellow(`Provider not found for session ${session.sessionId}`));
+              continue;
             }
+
+            const sessionData = await provider.parseSession(session);
 
             // Add __athrd metadata to the session data
             const enrichedData = {
               __athrd: {
                 githubUsername: userInfo.username,
                 githubRepo: githubRepo,
-                avatarImage: userInfo.avatarImage,
-                ide: getIDEName(session.source),
+                ide: provider.id, // Use provider ID as 'ide'
                 ...(orgInfo && {
                   orgId: orgInfo.orgId,
                   orgName: orgInfo.orgName,
@@ -170,8 +153,7 @@ export function listCommand(program: Command) {
             gistUrls.push(response.data.html_url || "");
             console.log(
               chalk.green(
-                `✓ ${session.customTitle || "Untitled Chat"}: ${
-                  response.data.html_url
+                `✓ ${session.customTitle || "Untitled Chat"}: ${response.data.html_url
                 }`
               )
             );

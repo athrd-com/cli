@@ -36,6 +36,7 @@
   "devDependencies": {
     "@types/inquirer": "^9.0.9",
     "@types/node": "^24.10.1",
+    "@types/update-notifier": "^6.0.8",
     "typescript": "^5.9.3"
   }
 }
