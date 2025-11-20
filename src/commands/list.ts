@@ -2,12 +2,16 @@ import { Octokit } from "@octokit/rest";
 import chalk from "chalk";
 import { Command } from "commander";
 import inquirer from "inquirer";
+import { getProvider, providers } from "../providers/index.js";
+import { ChatSession } from "../types/index.js";
 import { requireAuth } from "../utils/auth.js";
 import { formatDate } from "../utils/date.js";
 import { getGitHubRepo } from "../utils/git.js";
-import { getGitHubOrgInfo, getGitHubUserInfo, getGitHubRepoInfo } from "../utils/github.js";
-import { providers, getProvider } from "../providers/index.js";
-import { ChatSession } from "../types/index.js";
+import {
+  getGitHubOrgInfo,
+  getGitHubRepoInfo,
+  getGitHubUserInfo,
+} from "../utils/github.js";
 
 export function listCommand(program: Command) {
   program
@@ -56,7 +60,9 @@ export function listCommand(program: Command) {
             : "";
 
           const provider = getProvider(session.source);
-          const sourceLabel = chalk.dim(`(${provider?.name || session.source})`);
+          const sourceLabel = chalk.dim(
+            `(${provider?.name || session.source})`
+          );
 
           return {
             name: `${title} ${workspace} ${sourceLabel} ${dateStr} ${messages}`,
@@ -97,7 +103,7 @@ export function listCommand(program: Command) {
         });
 
         // Upload to private gists
-        console.log(chalk.blue("\n📤 Uploading to private gists..."));
+        console.log(chalk.blue("\n📤 Uploading..."));
 
         try {
           const token = await requireAuth();
@@ -111,14 +117,20 @@ export function listCommand(program: Command) {
           for (const session of answers.selectedSessions) {
             const provider = getProvider(session.source);
             if (!provider) {
-              console.warn(chalk.yellow(`Provider not found for session ${session.sessionId}`));
+              console.warn(
+                chalk.yellow(
+                  `Provider not found for session ${session.sessionId}`
+                )
+              );
               continue;
             }
 
             const sessionData = await provider.parseSession(session);
 
             // Get GitHub repo for this session
-            const githubRepo = session.workspacePath ? getGitHubRepo(session.workspacePath) : null;
+            const githubRepo = session.workspacePath
+              ? getGitHubRepo(session.workspacePath)
+              : null;
 
             // Extract organization name from repo (format: "org/repo")
             const orgName = githubRepo?.split("/")[0];
@@ -127,9 +139,10 @@ export function listCommand(program: Command) {
               ? await getGitHubOrgInfo(octokit, orgName)
               : null;
 
-            const repoInfo = (orgName && repoName)
-              ? await getGitHubRepoInfo(octokit, orgName, repoName)
-              : null;
+            const repoInfo =
+              orgName && repoName
+                ? await getGitHubRepoInfo(octokit, orgName, repoName)
+                : null;
 
             // Add __athrd metadata to the session data
             const enrichedData = {
@@ -157,26 +170,21 @@ export function listCommand(program: Command) {
               files: {
                 [fileName]: { content },
               },
-              description: `athrd-${session.sessionId}`,
+              description: session.customTitle || "AI Chat Thread",
               public: false,
             });
 
             gistUrls.push(response.data.html_url || "");
             console.log(
               chalk.green(
-                `✓ ${session.customTitle || "Untitled Chat"}: ${response.data.html_url
-                }`
+                `✓ ${
+                  session.customTitle || "Untitled Chat"
+                }: https://athrd.com/threads/${response.data.id}`
               )
             );
           }
-
-          console.log(
-            chalk.green(
-              `\n✅ Successfully uploaded ${gistUrls.length} gist(s)!`
-            )
-          );
         } catch (error) {
-          console.error(chalk.red("\n❌ Failed to upload to gist:"), error);
+          console.error(chalk.red("\n❌ Failed to upload:"), error);
           process.exit(1);
         }
       } catch (error) {
