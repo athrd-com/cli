@@ -12,7 +12,6 @@ export interface GitHubOrgInfo {
 }
 
 let cachedUserInfo: GitHubUserInfo | null = null;
-let cachedOrgInfo: GitHubOrgInfo | null = null;
 
 /**
  * Fetch authenticated user's GitHub information
@@ -42,6 +41,8 @@ export function resetGitHubUserInfoCache(): void {
   cachedUserInfo = null;
 }
 
+const cachedOrgInfos = new Map<string, GitHubOrgInfo>();
+
 /**
  * Fetch GitHub organization information
  * Results are cached to avoid multiple API calls during batch uploads
@@ -50,8 +51,8 @@ export async function getGitHubOrgInfo(
   octokit: Octokit,
   orgName: string
 ): Promise<GitHubOrgInfo> {
-  if (cachedOrgInfo) {
-    return cachedOrgInfo;
+  if (cachedOrgInfos.has(orgName)) {
+    return cachedOrgInfos.get(orgName)!;
   }
 
   const response = await octokit.orgs.get({ org: orgName });
@@ -61,7 +62,7 @@ export async function getGitHubOrgInfo(
     orgIcon: response.data.avatar_url,
   };
 
-  cachedOrgInfo = orgInfo;
+  cachedOrgInfos.set(orgName, orgInfo);
   return orgInfo;
 }
 
@@ -69,5 +70,36 @@ export async function getGitHubOrgInfo(
  * Reset cached org info (useful for testing or multiple sessions)
  */
 export function resetGitHubOrgInfoCache(): void {
-  cachedOrgInfo = null;
+  cachedOrgInfos.clear();
+}
+
+export interface GitHubRepoInfo {
+  repoId: number;
+  name: string;
+}
+
+const cachedRepoInfos = new Map<string, GitHubRepoInfo>();
+
+/**
+ * Fetch GitHub repository information
+ * Results are cached to avoid multiple API calls during batch uploads
+ */
+export async function getGitHubRepoInfo(
+  octokit: Octokit,
+  owner: string,
+  repo: string
+): Promise<GitHubRepoInfo> {
+  const cacheKey = `${owner}/${repo}`;
+  if (cachedRepoInfos.has(cacheKey)) {
+    return cachedRepoInfos.get(cacheKey)!;
+  }
+
+  const response = await octokit.repos.get({ owner, repo });
+  const repoInfo: GitHubRepoInfo = {
+    repoId: response.data.id,
+    name: response.data.name,
+  };
+
+  cachedRepoInfos.set(cacheKey, repoInfo);
+  return repoInfo;
 }

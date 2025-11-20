@@ -36,6 +36,7 @@ export class VSCodeProvider implements ChatProvider {
 
             // Try to read workspace name from workspace.json
             let workspaceName: string | undefined;
+            let workspacePath: string | undefined;
             try {
                 const workspaceJsonPath = path.join(
                     workspaceStorageDir,
@@ -50,6 +51,7 @@ export class VSCodeProvider implements ChatProvider {
                         const folderUri = workspaceJson.folder;
                         const folderPath = folderUri.replace(/^file:\/\//, "");
                         workspaceName = path.basename(folderPath);
+                        workspacePath = folderPath;
                     }
                 }
             } catch (error) {
@@ -85,6 +87,7 @@ export class VSCodeProvider implements ChatProvider {
                                 filePath,
                                 source: this.id,
                                 workspaceName,
+                                workspacePath,
                             });
                         } catch (error) {
                             // Skip invalid JSON files

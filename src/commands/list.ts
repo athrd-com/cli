@@ -5,7 +5,7 @@ import inquirer from "inquirer";
 import { requireAuth } from "../utils/auth.js";
 import { formatDate } from "../utils/date.js";
 import { getGitHubRepo } from "../utils/git.js";
-import { getGitHubOrgInfo, getGitHubUserInfo } from "../utils/github.js";
+import { getGitHubOrgInfo, getGitHubUserInfo, getGitHubRepoInfo } from "../utils/github.js";
 import { providers, getProvider } from "../providers/index.js";
 import { ChatSession } from "../types/index.js";
 
@@ -103,15 +103,8 @@ export function listCommand(program: Command) {
           const token = await requireAuth();
           const octokit = new Octokit({ auth: token });
 
-          // Fetch GitHub user info and repo once
+          // Fetch GitHub user info once
           const userInfo = await getGitHubUserInfo(octokit);
-          const githubRepo = getGitHubRepo();
-
-          // Extract organization name from repo (format: "org/repo")
-          const orgName = githubRepo?.split("/")[0];
-          const orgInfo = orgName
-            ? await getGitHubOrgInfo(octokit, orgName)
-            : null;
 
           const gistUrls: string[] = [];
 
@@ -124,12 +117,30 @@ export function listCommand(program: Command) {
 
             const sessionData = await provider.parseSession(session);
 
+            // Get GitHub repo for this session
+            const githubRepo = session.workspacePath ? getGitHubRepo(session.workspacePath) : null;
+
+            // Extract organization name from repo (format: "org/repo")
+            const orgName = githubRepo?.split("/")[0];
+            const repoName = githubRepo?.split("/")[1];
+            const orgInfo = orgName
+              ? await getGitHubOrgInfo(octokit, orgName)
+              : null;
+
+            const repoInfo = (orgName && repoName)
+              ? await getGitHubRepoInfo(octokit, orgName, repoName)
+              : null;
+
             // Add __athrd metadata to the session data
             const enrichedData = {
               __athrd: {
                 githubUsername: userInfo.username,
                 githubRepo: githubRepo,
                 ide: provider.id, // Use provider ID as 'ide'
+                ...(repoInfo && {
+                  ghRepoId: repoInfo.repoId,
+                  name: repoInfo.name,
+                }),
                 ...(orgInfo && {
                   orgId: orgInfo.orgId,
                   orgName: orgInfo.orgName,

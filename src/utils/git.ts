@@ -5,10 +5,11 @@ import { execSync } from "child_process";
  * Supports both HTTPS and SSH remote URLs
  * Returns null if not in a git repo or can't determine the repo
  */
-export function getGitHubRepo(): string | null {
+export function getGitHubRepo(cwd?: string): string | null {
   try {
     const remoteUrl = execSync("git remote get-url origin", {
       encoding: "utf-8",
+      cwd,
     }).trim();
 
     if (!remoteUrl) {
